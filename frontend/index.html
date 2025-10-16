@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Content Auth Demo</title>
+  <style>
+    body { font-family: sans-serif; max-width: 480px; margin: 2rem auto; }
+    input, button { width: 100%; padding: 0.6rem; margin-bottom: 0.8rem; }
+    pre { background: #f5f5f5; padding: 1rem; min-height: 120px; }
+    .message { padding: 0.8rem; margin: 0.5rem 0; border-radius: 4px; }
+    .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+  </style>
+</head>
+<body>
+  <h1>Content Auth Demo</h1>
+
+  <section>
+    <h2>Регистрация</h2>
+    <input id="reg-email" placeholder="Email" type="email">
+    <input id="reg-name" placeholder="Имя">
+    <input id="reg-password" type="password" placeholder="Пароль">
+    <button type="button" onclick="register()">Зарегистрироваться</button>
+    <div id="reg-message"></div>
+  </section>
+
+  <section>
+    <h2>Логин</h2>
+    <input id="login-email" placeholder="Email" type="email">
+    <input id="login-password" type="password" placeholder="Пароль">
+    <button type="button" onclick="login()">Войти</button>
+    <div id="login-message"></div>
+  </section>
+
+  <section>
+    <h2>Профиль</h2>
+    <div id="profile-info" class="info message" style="display: none;">
+      Токен сохранен. Нажмите "Получить /me" для получения данных профиля.
+    </div>
+    <button type="button" onclick="getMe()">Получить /me</button>
+    <button type="button" onclick="logout()">Выйти</button>
+    <pre id="output">Здесь будут ответы API</pre>
+  </section>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:8000/api/v1";
+    let token = null;
+
+    function showMessage(elementId, message, type = 'info') {
+      const element = document.getElementById(elementId);
+      element.innerHTML = `<div class="message ${type}">${message}</div>`;
+    }
+
+    async function register(event) {
+      // Предотвращаем любое стандартное поведение
+      if (event) event.preventDefault();
+      
+      const email = document.getElementById("reg-email").value;
+      const name = document.getElementById("reg-name").value;
+      const password = document.getElementById("reg-password").value;
+
+      // Очищаем сообщения ТОЛЬКО в разделе регистрации
+      document.getElementById("reg-message").innerHTML = '';
+
+      if (!email || !name || !password) {
+        showMessage('reg-message', '❌ Заполните все поля', 'error');
+        return false; // Предотвращаем дальнейшее выполнение
+      }
+
+      try {
+        const payload = { email, full_name: name, password };
+        const res = await fetch(`${API_BASE}/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          showMessage('reg-message', '✅ Регистрация успешна! Теперь можете войти.', 'success');
+          // Очищаем поля после успешной регистрации
+          document.getElementById("reg-email").value = '';
+          document.getElementById("reg-name").value = '';
+          document.getElementById("reg-password").value = '';
+        } else {
+          showMessage('reg-message', `❌ Ошибка: ${data.detail || 'Неизвестная ошибка'}`, 'error');
+        }
+        show(data);
+      } catch (error) {
+        showMessage('reg-message', '❌ Ошибка сети', 'error');
+        show({ error: error.message });
+      }
+      
+      return false; // Всегда возвращаем false чтобы предотвратить отправку формы
+    }
+
+    async function login(event) {
+      if (event) event.preventDefault();
+      
+      const email = document.getElementById("login-email").value;
+      const password = document.getElementById("login-password").value;
+
+      // Очищаем сообщения ТОЛЬКО в разделе логина
+      document.getElementById("login-message").innerHTML = '';
+
+      if (!email || !password) {
+        showMessage('login-message', '❌ Заполните email и пароль', 'error');
+        return false;
+      }
+
+      try {
+        const params = new URLSearchParams();
+        params.append("username", email);
+        params.append("password", password);
+
+        const res = await fetch(`${API_BASE}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          token = data.access_token;
+          showMessage('login-message', '✅ Вход успешен! Токен сохранен.', 'success');
+          document.getElementById("profile-info").style.display = 'block';
+          // Очищаем поля после успешного входа
+          document.getElementById("login-email").value = '';
+          document.getElementById("login-password").value = '';
+        } else {
+          showMessage('login-message', `❌ Ошибка: ${data.detail || 'Неверные учетные данные'}`, 'error');
+        }
+        show(data);
+      } catch (error) {
+        showMessage('login-message', '❌ Ошибка сети', 'error');
+        show({ error: error.message });
+      }
+      
+      return false;
+    }
+
+    async function getMe() {
+      if (!token) {
+        showMessage('login-message', '❌ Сначала выполните вход', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          showMessage('login-message', '✅ Данные профиля получены', 'success');
+        } else {
+          showMessage('login-message', `❌ Ошибка: ${data.detail || 'Неизвестная ошибка'}`, 'error');
+        }
+        show(data);
+      } catch (error) {
+        showMessage('login-message', '❌ Ошибка сети', 'error');
+        show({ error: error.message });
+      }
+    }
+
+    function logout() {
+      token = null;
+      document.getElementById("profile-info").style.display = 'none';
+      showMessage('login-message', '🔓 Выход выполнен. Токен очищен.', 'info');
+      show("Токен очищен на клиенте.");
+    }
+
+    function show(content) {
+      document.getElementById("output").textContent = typeof content === "string"
+        ? content
+        : JSON.stringify(content, null, 2);
+    }
+
+    // Предотвращаем отправку формы по Enter
+    document.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+      }
+    });
+
+    // Очищаем все сообщения при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById("reg-message").innerHTML = '';
+      document.getElementById("login-message").innerHTML = '';
+    });
+  </script>
+</body>
+</html>
