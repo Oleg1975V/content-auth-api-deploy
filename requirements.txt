@@ -26,4 +26,5 @@ urllib3==2.5.0
 fastapi
 uvicorn[standard]
 sqlalchemy>=2.0.0
-
+email-validator>=2.0.0
+pydantic>=2.0.0
